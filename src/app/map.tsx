@@ -24,72 +24,26 @@ import { Collection } from 'ol';
 interface Location {
   longitude: number;
   latitude: number;
+  address?: string;
 }
 
-interface Event {
-  id: number;
-  title: string;
-  subtitle: string;
-  location: Location;
-  category: string;
-  creator: {
-    name: string;
-    avatarUrl: string;
-  };
+interface Challenge {
+    id: string;
+    title: string;
+    description: string;
+    imageUrls: string[];
+    videoUrl?: string;
+    location: Location;
+    creatorName: string;
+    creatorAvatarUrl: string;
+    category: string;
+    timestamp?: string; // ISO String
 }
 
 // Placeholder user object
 const user = {
   avatarUrl: '/image.jpg', // Use local image
 };
-
-// Sample event data (with categories)
-const events: Event[] = [
-  {
-    id: 1,
-    title: 'BoomTown Fair',
-    subtitle: 'Music and Festival',
-    location: { longitude: 80.331871, latitude: 26.449923 },
-    category: 'Music',
-    creator: {
-      name: 'Sujan Pradhan',
-      avatarUrl: '/image.jpeg'
-    }
-  },
-  {
-    id: 2,
-    title: 'Concert in the Park',
-    subtitle: 'Live Music',
-    location: { longitude: -0.1278, latitude: 51.5074 },
-    category: 'Music',
-    creator: {
-      name: 'Alice Smith',
-      avatarUrl: '/image.jpeg'
-    }
-  },
-  {
-    id: 3,
-    title: 'Art Exhibition',
-    subtitle: 'Local Artists Showcase',
-    location: { longitude: 2.3522, latitude: 48.8566 },
-    category: 'Art',
-    creator: {
-      name: 'Bob Johnson',
-      avatarUrl: '/image.jpeg'
-    }
-  },
-    {
-    id: 4,
-    title: 'Food Festival',
-    subtitle: 'Local Cuisine',
-    location: { longitude: 2.3622, latitude: 48.8666 },
-    category: 'Food',
-    creator: {
-      name: 'Charlie Brown',
-      avatarUrl: '/image.jpeg'
-    }
-  },
-];
 
 
 const OpenLayersMap = () => {
@@ -104,7 +58,8 @@ const OpenLayersMap = () => {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>(events);
+  const [challenges, setChallenges] = useState<Challenge[]>([]); // State for challenges
+  const [filteredChallenges, setFilteredChallenges] = useState<Challenge[]>([]);
 
 
   const createUserIconStyle = () => {
@@ -323,9 +278,7 @@ const OpenLayersMap = () => {
     };
     map.on('click', clickHandler);
 
-    if (events.length > 0) {
-      updateDestinationMarker(events[0].location, map);
-    }
+
 
     // Cleanup
     return () => {
@@ -361,17 +314,17 @@ const OpenLayersMap = () => {
 
 // Update destination, and *remove* previous route
     useEffect(() => {
-        if (mapInstance.current && filteredEvents.length > 0) {
+        if (mapInstance.current && filteredChallenges.length > 0) {
             removeRoute(); // Remove the old route *before* updating the marker
-            updateDestinationMarker(filteredEvents[currentEventIndex].location, mapInstance.current);
+            updateDestinationMarker(filteredChallenges[currentEventIndex].location, mapInstance.current);
         }
-    }, [currentEventIndex, mapInstance.current, filteredEvents]);
+    }, [currentEventIndex, mapInstance.current, filteredChallenges]);
 
 
  // Route Calculation (now only runs if both locations are valid)
    useEffect(() => {
-        if (userLocation && filteredEvents.length > 0 && mapInstance.current) {
-            const destinationLocation = filteredEvents[currentEventIndex].location;
+        if (userLocation && filteredChallenges.length > 0 && mapInstance.current) {
+            const destinationLocation = filteredChallenges[currentEventIndex].location;
             const startCoord = fromLonLat([userLocation.longitude, userLocation.latitude]);
             const endCoord = fromLonLat([destinationLocation.longitude, destinationLocation.latitude]);
 
@@ -417,18 +370,18 @@ const OpenLayersMap = () => {
                     setError('Error fetching route: ' + err.message);
                 });
         }
-    }, [userLocation, currentEventIndex, mapInstance.current, filteredEvents]);
+    }, [userLocation, currentEventIndex, mapInstance.current, filteredChallenges]);
 
 
 // Filter events based on search term and categories
     useEffect(() => {
-        const filtered = events.filter(event => {
-            const titleMatch = event.title.toLowerCase().includes(searchTerm.toLowerCase());
-            const subtitleMatch = event.subtitle.toLowerCase().includes(searchTerm.toLowerCase());
-            const categoryMatch = selectedCategories.length === 0 || selectedCategories.includes(event.category); // Check if category matches
-            return (titleMatch || subtitleMatch) && categoryMatch;
-        });
-        setFilteredEvents(filtered);
+      const filtered = challenges.filter(challenge => {
+        const titleMatch = challenge.title.toLowerCase().includes(searchTerm.toLowerCase());
+        const descriptionMatch = challenge.description.toLowerCase().includes(searchTerm.toLowerCase());
+        const categoryMatch = selectedCategories.length === 0 || selectedCategories.includes(challenge.category);
+        return (titleMatch || descriptionMatch) && categoryMatch;
+      });
+        setFilteredChallenges(filtered);
 
         // Update map markers and carousel index based on the *first* filtered event.
         if (filtered.length > 0) {
@@ -458,7 +411,7 @@ const OpenLayersMap = () => {
              }
         }
 
-    }, [searchTerm, selectedCategories, mapInstance.current]);
+    }, [searchTerm, selectedCategories, mapInstance.current, challenges]);
 
     const handleCategoryClick = (category: string) => {
       setSelectedCategories((prevCategories) => {
@@ -470,8 +423,29 @@ const OpenLayersMap = () => {
       });
   };
 
-  const availableCategories = [...new Set(events.map((event) => event.category))];
+  const availableCategories = [...new Set(challenges.map((challenge) => challenge.category))];
 
+    useEffect(() => {
+        const fetchChallenges = async () => {
+            try {
+                const response = await fetch('/api/challenges'); // Your API endpoint
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data: Challenge[] = await response.json();
+                setChallenges(data);
+                 setFilteredChallenges(data);  //Initially show all challenges
+                if(data.length > 0 && mapInstance.current) {
+                    updateDestinationMarker(data[0].location, mapInstance.current);
+                }
+            } catch (error) {
+                console.error("Failed to fetch challenges:", error);
+                setError('Failed to load challenges.');
+            }
+        };
+
+        fetchChallenges();
+    }, []); // Fetch challenges on component mount
 
 
  return (
@@ -505,16 +479,16 @@ const OpenLayersMap = () => {
         ref={carouselRef}
         style={{borderTopLeftRadius: '20px', borderTopRightRadius: '20px', padding: '15px 0'}}
       >
-        {filteredEvents.map((event) => (
-          <div key={event.id} className="carousel-item ">
+        {filteredChallenges.map((challenge) => (
+          <div key={challenge.id} className="carousel-item ">
             <div className="event-card w-[90vw] mx-[5vw] flex flex-col rounded-lg shadow-md p-4 text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-800">
-              <img src="/image.jpeg" alt={event.title} className="event-image w-full h-32 object-cover rounded-md mb-4" />
+              <img src={challenge.imageUrls && challenge.imageUrls.length > 0 ? challenge.imageUrls[0] : "/image.jpeg"} alt={challenge.title} className="event-image w-full h-32 object-cover rounded-md mb-4" />
               <div className="event-info flex-1">
-                <div className="event-title font-bold text-lg mb-1">{event.title}</div>
-                <div className="event-subtitle text-sm mb-2">{event.subtitle}</div>
+                <div className="event-title font-bold text-lg mb-1">{challenge.title}</div>
+                <div className="event-subtitle text-sm mb-2">{challenge.description}</div>
                 <div className="event-creator flex items-center mt-auto">
-                    <img src={event.creator.avatarUrl} alt="Creator" className="creator-avatar w-5 h-5 rounded-full mr-2" />
-                  <span className='text-gray-800 dark:text-gray-300'>{event.creator.name}</span>
+                    <img src={challenge.creatorAvatarUrl} alt="Creator" className="creator-avatar w-5 h-5 rounded-full mr-2" />
+                  <span className='text-gray-800 dark:text-gray-300'>{challenge.creatorName}</span>
                 </div>
               </div>
             </div>

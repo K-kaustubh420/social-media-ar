@@ -1,22 +1,34 @@
-import { initializeApp } from "firebase/app";
+// firebase.ts
+import { initializeApp, getApp } from "firebase/app"; // Import getApp
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyA6l0qbDNjTKb6RPaPDfLyjQY1drPf9u5A",
-  authDomain: "destination-7adeb.firebaseapp.com",
-  projectId: "destination-7adeb",
-  storageBucket: "destination-7adeb.appspot.com", // Note: Fix the storage domain if incorrect
-  messagingSenderId: "1028301786204",
-  appId: "1:1028301786204:web:169a24cba56f68a974aa99",
-  measurementId: "G-NWMEQGGZP8"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Initialize Firebase App (conditionally)
+let app;
+try {
+  app = getApp(); // Check if an app is already initialized
+} catch (e: any) {
+  app = initializeApp(firebaseConfig); // If not, initialize
+}
+
+// Initialize Firebase Services (conditionally)
+let analytics;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+
 const db = getFirestore(app);
 const storage = getStorage(app);
 

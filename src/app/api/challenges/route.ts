@@ -1,167 +1,95 @@
-// app/api/challenges/route.ts
+import { NextResponse } from 'next/server';
 import { db } from '@/firebase/firebase';
-import { collection, getDocs, query, orderBy, startAfter, limit, DocumentData, QuerySnapshot } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { Mistral } from '@mistralai/mistralai';
 
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+interface Location {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
 
 interface Challenge {
   id: string;
   title: string;
   description: string;
   imageUrls: string[];
-  category: string;
+  videoUrl?: string;
+  location: Location;
   creatorName: string;
-  location: { latitude: number; longitude: number; address: string; };
-  timestamp?: { seconds: number; nanoseconds: number };
-  [key: string]: any; // allows other properties, not required
+  creatorAvatarUrl: string;
+  category: string;
+  timestamp?: string; // ISO String
+  likes?: number;
+  views?: number;
+  commentsCount?: number;
 }
 
-// Function to fetch initial challenges
-async function fetchInitialChallenges(pageSize: number): Promise<{ challenges: Challenge[]; lastVisible: DocumentData | null }> {
-  try {
-    const challengesRef = collection(db, 'challenges');
-    const q = query(challengesRef, orderBy('timestamp', 'desc'), limit(pageSize));
-    const snapshot = await getDocs(q);
+const apiKey = process.env.MISTRAL_API_KEY;
+const client = apiKey ? new Mistral({ apiKey }) : null;
 
-    const challenges: Challenge[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Challenge));
-    const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
-    return { challenges, lastVisible };
-
-  } catch (error) {
-    console.error("Error fetching initial challenges:", error);
-    return { challenges: [], lastVisible: null };
-  }
-}
-
-// Function to fetch paginated challenges
-async function fetchPaginatedChallenges(pageSize: number, lastVisible: DocumentData): Promise<{ challenges: Challenge[]; lastVisible: DocumentData | null }> {
-  try {
-    if (!lastVisible) {
-      console.warn("No lastVisible document provided. Returning empty results.");
-      return { challenges: [], lastVisible: null };
-    }
-
-    const challengesRef = collection(db, 'challenges');
-    const q = query(challengesRef, orderBy('timestamp', 'desc'), startAfter(lastVisible), limit(pageSize));
-    const snapshot = await getDocs(q);
-
-    const challenges: Challenge[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Challenge));
-    const newLastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
-    return { challenges, newLastVisible };
-  } catch (error) {
-    console.error("Error fetching paginated challenges:", error);
-    return { challenges: [], lastVisible: null };
-  }
-}
-
-async function getChallengeRecommendations(userPreferences: string, challenges: Challenge[]): Promise<Challenge[]> {
-  if (!MISTRAL_API_KEY) {
-    console.warn("Mistral API key not set. Returning unfiltered challenges.");
+async function getRecommendations(challenges: Challenge[]): Promise<Challenge[]> {
+  if (!client) {
+    console.warn('Mistral API key is missing. Returning challenges without recommendations.');
     return challenges;
   }
 
   try {
-    const prompt = `You are a recommendation system for a social media platform based on challenges. Given the user preferences: "${userPreferences}" and a list of challenges, rank the challenges based on their relevance to the user preferences. Return only the challenge IDs in order of relevance from most relevant to least relevant. \n\nChallenges:\n${challenges.map(c => `${c.id}: ${c.title} - ${c.category} - ${c.description}`).join('\n')}\n\nRanked Challenge IDs (most relevant to least relevant, comma separated):`;
-
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'mistral-small',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 200,
-        top_p: 1,
-        frequency_penalty: 0,
-        presence_penalty: 0,
-        stream: false,
-        safe_mode: false,
-      }),
+    const chatResponse = await client.chat.complete({
+      model: 'mistral-large-latest',
+      messages: [
+        { role: 'system', content: 'You are an AI assistant providing recommendations.' },
+        { role: 'user', content: `Recommend the best challenges from the following data: ${JSON.stringify(challenges)}` }
+      ],
     });
 
-    if (!response.ok) {
-      console.error(`Mistral API error: ${response.status} - ${await response.text()}`);
-      return challenges;
-    }
+    const responseText = chatResponse.choices?.[0]?.message?.content;
+    console.log('Mistral Recommendations:', responseText);
 
-    const data = await response.json();
-    const content = data.choices[0].message.content as string;
+    // Extract challenge titles using regex
+    const recommendedTitles = [...responseText.matchAll(/\*\*(.*?)\*\*/g)].map(match => match[1]);
 
-    const rankedIds = content.split(',').map(id => id.trim());
+    console.log('Extracted Recommended Titles:', recommendedTitles);
 
-    // Create a map of challenge IDs to challenges for efficient lookup.
-    const challengeMap: { [id: string]: Challenge } = {};
-    challenges.forEach(challenge => {
-      challengeMap[challenge.id] = challenge;
+    // Add the '(Recommended)' label for matching titles
+    const finalChallenges = challenges.map((challenge) => {
+      const isRecommended = recommendedTitles.some(title => challenge.title.toLowerCase() === title.toLowerCase());
+      return {
+        ...challenge,
+        title: isRecommended ? `${challenge.title} (Recommended)` : challenge.title,
+      };
     });
 
-    // Rank the challenges based on the order of IDs returned by Mistral.
-    const rankedChallenges: Challenge[] = [];
-    rankedIds.forEach(id => {
-      if (challengeMap[id]) {
-        rankedChallenges.push(challengeMap[id]);
-      }
-    });
-
-    // Append any challenges that were not ranked by Mistral to the end of the list.
-    challenges.forEach(challenge => {
-      if (!rankedIds.includes(challenge.id) && !rankedChallenges.includes(challenge)) {
-        rankedChallenges.push(challenge);
-      }
-    });
-
-    return rankedChallenges;
-
+    return finalChallenges;
   } catch (error) {
-    console.error("Error during Mistral API call:", error);
-    return challenges;
+    console.error('Error fetching recommendations from Mistral:', error);
+    return challenges; // Return challenges as-is if Mistral fails
   }
 }
 
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const cursorParam = searchParams.get('cursor');
-  const pageSizeParam = searchParams.get('pageSize');
-  const userPreferences = searchParams.get('userPreferences') || '';  // Default to empty string if not provided
-
-  const pageSize = pageSizeParam ? parseInt(pageSizeParam, 10) : 10; // Default page size
-  let lastVisible: DocumentData | null = null;
-
+export async function GET() {
   try {
-    if (cursorParam) {
-      lastVisible = JSON.parse(decodeURIComponent(cursorParam));
-    }
-  } catch (error) {
-    console.error("Error parsing cursor:", error);
-    return new Response(JSON.stringify({ error: 'Invalid cursor' }), { status: 400 });
+    const q = query(collection(db, 'challenges'), orderBy('timestamp', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const challenges: Challenge[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const timestamp = data.timestamp ? data.timestamp.toDate().toISOString() : undefined;
+
+      challenges.push({
+        id: doc.id,
+        ...data,
+        timestamp
+      } as Challenge);
+    });
+
+    // Get AI Recommendations using Mistral with fallback
+    const recommendedChallenges = await getRecommendations(challenges);
+
+    return NextResponse.json(recommendedChallenges);
+  } catch (error: any) {
+    console.error('Error fetching challenges from Firebase:', error);
+    return NextResponse.json([], { status: 500 });
   }
-
-
-  let challengesResult;
-  if (lastVisible) {
-    challengesResult = await fetchPaginatedChallenges(pageSize, lastVisible);
-  } else {
-    challengesResult = await fetchInitialChallenges(pageSize);
-  }
-
-  let { challenges, lastVisible: newLastVisible } = challengesResult;
-
-  if (userPreferences) {
-    challenges = await getChallengeRecommendations(userPreferences, challenges);
-  }
-
-
-  const nextCursor = newLastVisible ? encodeURIComponent(JSON.stringify(newLastVisible)) : null;
-
-  return new Response(JSON.stringify({
-    challenges,
-    nextCursor,
-  }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
 }
