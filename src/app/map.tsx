@@ -1,5 +1,5 @@
 'use client';
-
+import Link from 'next/link';
 import React, { useState, useEffect, useRef } from 'react';
 import 'ol/ol.css';
 import Map from 'ol/Map';
@@ -453,7 +453,7 @@ const OpenLayersMap = () => {
       <div ref={mapRef} className="map h-full w-full" />
 
       {/* Search and Filter Card */}
-      <div className='text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-box absolute bottom-72 left-1/2 transform -translate-x-1/2  z-10 w-[90vw] p-4 shadow-lg'>
+      <div className='text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-box absolute bottom-80 left-1/2 transform -translate-x-1/2  z-10 w-[90vw] p-4 shadow-lg'>
             <input
                 type="text"
                 placeholder="Search events..."
@@ -486,6 +486,9 @@ const OpenLayersMap = () => {
               <div className="event-info flex-1">
                 <div className="event-title font-bold text-lg mb-1">{challenge.title}</div>
                 <div className="event-subtitle text-sm mb-2">{challenge.description}</div>
+                <Link href={`/challenge-details?id=${challenge.id}`}>
+        <button className="view-details-button">View Details</button>
+      </Link>
                 <div className="event-creator flex items-center mt-auto">
                     <img src={challenge.creatorAvatarUrl} alt="Creator" className="creator-avatar w-5 h-5 rounded-full mr-2" />
                   <span className='text-gray-800 dark:text-gray-300'>{challenge.creatorName}</span>
