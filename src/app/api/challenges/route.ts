@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/firebase/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, getDoc } from 'firebase/firestore';
 import { Mistral } from '@mistralai/mistralai';
 
 interface Location {
@@ -28,30 +28,69 @@ interface Challenge {
 const apiKey = process.env.MISTRAL_API_KEY;
 const client = apiKey ? new Mistral({ apiKey }) : null;
 
-async function getRecommendations(challenges: Challenge[]): Promise<Challenge[]> {
+
+// Function to fetch user profile
+async function getUserProfile(userId: string | null | undefined) { // userId can be null or undefined
+  if (!userId) {
+    return null; // Return null if no userId is provided (not logged in)
+  }
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      return userDocSnap.data();
+    } else {
+      console.log(`User profile not found for UID: ${userId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+}
+
+
+// Modified getRecommendations function with type check
+async function getRecommendations(challenges: Challenge[], userProfile: any): Promise<Challenge[]> {
   if (!client) {
     console.warn('Mistral API key is missing. Returning challenges without recommendations.');
     return challenges;
   }
 
   try {
+    let promptContent = `Recommend the best challenges from the following data: ${JSON.stringify(challenges)}`;
+
+    if (userProfile && userProfile.visitedLocationIds && userProfile.visitedLocationIds.length > 0) {
+      promptContent = `Recommend challenges that might be interesting to a user who has visited locations with IDs: ${JSON.stringify(userProfile.visitedLocationIds)}.  Consider these user's past interests when recommending challenges. Here are the available challenges: ${JSON.stringify(challenges)}`;
+    } else {
+      promptContent = `Recommend the best challenges from the following data for a general user. ${JSON.stringify(challenges)}`;
+    }
+
+
     const chatResponse = await client.chat.complete({
       model: 'mistral-large-latest',
       messages: [
-        { role: 'system', content: 'You are an AI assistant providing recommendations.' },
-        { role: 'user', content: `Recommend the best challenges from the following data: ${JSON.stringify(challenges)}` }
+        { role: 'system', content: 'You are an AI assistant providing personalized challenge recommendations.' },
+        { role: 'user', content: promptContent }
       ],
     });
 
     const responseText = chatResponse.choices?.[0]?.message?.content;
     console.log('Mistral Recommendations:', responseText);
 
-    // Extract challenge titles using regex
-    const recommendedTitles = [...responseText.matchAll(/\*\*(.*?)\*\*/g)].map(match => match[1]);
+    let recommendedTitles: string[] = []; // Initialize as empty array
+
+    if (typeof responseText === 'string') { // Add type check here
+      recommendedTitles = [...responseText.matchAll(/\*\*(.*?)\*\*/g)].map(match => match[1]);
+    } else {
+      console.warn('Mistral response content is not a string. Skipping title extraction.');
+      recommendedTitles = []; // Ensure it remains an empty array in case of non-string response
+    }
+
 
     console.log('Extracted Recommended Titles:', recommendedTitles);
 
-    // Add the '(Recommended)' label for matching titles
     const finalChallenges = challenges.map((challenge) => {
       const isRecommended = recommendedTitles.some(title => challenge.title.toLowerCase() === title.toLowerCase());
       return {
@@ -67,8 +106,15 @@ async function getRecommendations(challenges: Challenge[]): Promise<Challenge[]>
   }
 }
 
-export async function GET() {
+// Updated GET function
+export async function GET(request: Request) { // Add request parameter
   try {
+    // 1. Get userId from query parameter (INSECURE - for example only)
+    const searchParams = new URL(request.url).searchParams;
+    const userId = searchParams.get('userId'); // Example: /api/challenges?userId=someUserId
+
+    console.log('User ID from query parameter:', userId); // Log the userId
+
     const q = query(collection(db, 'challenges'), orderBy('timestamp', 'desc'));
     const querySnapshot = await getDocs(q);
     const challenges: Challenge[] = [];
@@ -84,8 +130,11 @@ export async function GET() {
       } as Challenge);
     });
 
-    // Get AI Recommendations using Mistral with fallback
-    const recommendedChallenges = await getRecommendations(challenges);
+    // 2. Fetch user profile (only if userId is present)
+    const userProfile = await getUserProfile(userId); // Pass userId to getUserProfile
+
+    // 3. Get AI Recommendations using Mistral with fallback and user profile
+    const recommendedChallenges = await getRecommendations(challenges, userProfile);
 
     return NextResponse.json(recommendedChallenges);
   } catch (error: any) {

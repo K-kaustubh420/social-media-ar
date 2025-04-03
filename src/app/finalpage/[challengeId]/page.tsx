@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation'; // Corrected import
 import { auth, db } from '@/firebase/firebase';
 import { doc, getDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
 
@@ -64,7 +64,6 @@ interface FinalPageData {
 }
 
 export default function FinalPage() {
-  const router = useRouter();
   const params = useParams();
   const challengeId = params?.challengeId as string;  //Use optional chaining in case params is undefined
 

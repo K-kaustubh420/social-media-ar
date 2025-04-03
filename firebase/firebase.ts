@@ -1,8 +1,9 @@
 // firebase.ts
 import { initializeApp, getApp } from "firebase/app"; // Import getApp
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, doc, setDoc } from "firebase/firestore"; // Add doc and setDoc
 import { getStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth"; // Add this line here
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -31,6 +32,18 @@ if (typeof window !== 'undefined') {
 
 const db = getFirestore(app);
 const storage = getStorage(app);
+const auth = getAuth(app); // Add this line here
+
+// Define the createUserProfile function
+export const createUserProfile = async (user: any) => {
+  const userRef = doc(db, "users", user.uid); // Create a reference to the user's profile in Firestore
+  await setDoc(userRef, {
+    displayName: user.displayName,
+    email: user.email,
+    // Add other fields here as needed
+  });
+  return user;
+};
 
 // Export the services
-export { app, analytics, db, storage };
+export { app, analytics, db, storage, auth, createUserProfile }; // Add createUserProfile here

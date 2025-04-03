@@ -1,5 +1,7 @@
 'use client';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { auth } from '@/firebase/firebase'; // Import Firebase auth instance
 import React, { useState, useEffect, useRef } from 'react';
 import 'ol/ol.css';
 import Map from 'ol/Map';
@@ -47,6 +49,10 @@ const user = {
 
 
 const OpenLayersMap = () => {
+  // ✅ 1. Call useSearchParams *directly in the component body* (OUTSIDE useEffect, at the top)
+  const searchParams = useSearchParams();
+  // ✅ 2. Get userIdFromURL *after* calling useSearchParams (OUTSIDE useEffect, right after)
+  const userIdFromURL = searchParams.get('userId');
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -426,23 +432,37 @@ const OpenLayersMap = () => {
   const availableCategories = [...new Set(challenges.map((challenge) => challenge.category))];
 
     useEffect(() => {
-        const fetchChallenges = async () => {
-            try {
-                const response = await fetch('/api/challenges'); // Your API endpoint
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data: Challenge[] = await response.json();
-                setChallenges(data);
-                 setFilteredChallenges(data);  //Initially show all challenges
-                if(data.length > 0 && mapInstance.current) {
-                    updateDestinationMarker(data[0].location, mapInstance.current);
-                }
-            } catch (error) {
-                console.error("Failed to fetch challenges:", error);
-                setError('Failed to load challenges.');
+      const fetchChallenges = async () => {
+        try {
+            // ✅ 1. Get the current user from Firebase Auth
+            const currentUser = auth.currentUser;
+            let userId = null;
+            if (currentUser) {
+                userId = currentUser.uid; // Get the UID if user is logged in
             }
-        };
+    
+            // ✅ 2. Construct API URL, conditionally adding userId query parameter
+            let apiUrl = '/api/challenges';
+            if (userId) {
+                apiUrl = `/api/challenges?userId=${userId}`; // Add userId if available
+            }
+    
+            // 3. Fetch data from the API (no change needed here)
+            const response = await fetch(apiUrl); // Use the constructed apiUrl
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data: Challenge[] = await response.json();
+            setChallenges(data);
+            setFilteredChallenges(data);  // Initially show all challenges
+            if (data.length > 0 && mapInstance.current) {
+                updateDestinationMarker(data[0].location, mapInstance.current);
+            }
+        } catch (error) {
+            console.error("Failed to fetch challenges:", error);
+            setError('Failed to load challenges.');
+        }
+    };
 
         fetchChallenges();
     }, []); // Fetch challenges on component mount

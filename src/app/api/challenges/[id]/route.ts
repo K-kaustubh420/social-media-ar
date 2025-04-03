@@ -1,10 +1,10 @@
-// app/api/challenges/[id]/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/firebase/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const { id: challengeId } = params;
+export async function GET(request: Request, context: { params: { id: string } }) {
+  const { params } = context; // Get params first
+  const challengeId = params.id; // Extract ID safely
 
   try {
     const challengeDocRef = doc(db, 'challenges', challengeId);
@@ -13,11 +13,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
     if (challengeDocSnap.exists()) {
       const challengeData = challengeDocSnap.data();
 
-      // Access latitude and longitude from the nested 'location' object:
-      const location = challengeData.location;  // Get the location object
-
-      const latitude = location?.latitude || null;       // Access latitude with optional chaining, default to null
-      const longitude = location?.longitude || null;     // Access longitude with optional chaining, default to null
+      const location = challengeData.location || {}; // Ensure location exists to avoid undefined errors
+      const latitude = location.latitude || null;
+      const longitude = location.longitude || null;
 
       const timestamp = challengeData.timestamp ? challengeData.timestamp.toDate().toISOString() : undefined;
 
@@ -31,15 +29,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
         dailyVisits: challengeData.dailyVisits,
         participants: challengeData.participants,
         startDate: challengeData.startDate,
-        locationName: challengeData.locationName || null, // Assuming this exists outside the location object
-        latitude: latitude,
-        longitude: longitude,
+        locationName: challengeData.locationName || null,
+        latitude,
+        longitude,
         challengeImages: challengeData.imageUrls || [],
         challengeVideos: challengeData.videoUrls || [],
         challengeFiles: challengeData.challengeFiles || [],
         imageUrl: challengeData.imageUrl || null,
         videoUrl: challengeData.videoUrl || null,
-        timestamp: timestamp,
+        timestamp,
       };
 
       return NextResponse.json(challenge);
