@@ -1,7 +1,7 @@
 // ChallengeDetailsPage.tsx
 'use client'
-import React, { useState, useEffect } from "react";
-import { Heart, MessageCircle, Share2, Bookmark, MapPin, Users, Calendar, ChevronDown, ChevronUp, Image, Video, File } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Heart, MessageCircle, Share2, Bookmark, MapPin, Users, Calendar, ChevronDown, ChevronUp, Image, Video, File, Send, Navigation } from "lucide-react";
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 //import { useAuth } from '@/firebase/authContext'; // Assuming you have an auth context activate when using authentication
@@ -16,7 +16,6 @@ interface ChallengeDetailsProps {
     creatorName: string;
     creatorAvatarUrl: string; // Creator profile image URL (using creatorAvatarUrl)
     dailyVisits: number;
-    followers: number;
     startDate: string;
     description: string;
     locationName: string;
@@ -55,7 +54,7 @@ const useMockAuth = () => {
 
   const router = useRouter();
   const { authUser, loading: authLoading } =  useMockAuth();  //useAuth(); // Use your auth context to get user and loading state
-
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (challengeId) {
@@ -129,184 +128,166 @@ const useMockAuth = () => {
 
 
   return (
-    <div className="bg-black text-white min-h-screen">
-      <div className="container mx-auto p-4">
-        {/* Prominent Single Image at Top */}
-        {challengeData.challengeImages && challengeData.challengeImages.length > 0 ? (
-          <img
-            src={challengeData.challengeImages[0]}
-            alt={challengeData.title}
-            className="w-full h-[300px] object-cover rounded-lg mb-4"
-          />
-        ) : (
-          challengeData.imageUrl && (
-            <img
-              src={challengeData.imageUrl || "https://via.placeholder.com/400x300"}
-              alt={challengeData.title}
-              className="w-full h-[300px] object-cover rounded-lg mb-4"
-            />
-          )
-        )}
-
-        {/* Combined Image and Video Horizontal Scroll Gallery */}
-        <div className="mt-4 overflow-x-auto whitespace-nowrap">
-          {(challengeData.challengeImages || []).map((imageUrl, index) => (
-            <img
-              key={`image-${index}`}
-              src={imageUrl}
-              alt={`Challenge Image ${index + 1}`}
-              className="inline-block w-[200px] h-[200px] rounded-lg mr-2 object-cover"
-            />
-          ))}
-          {(challengeData.challengeVideos || []).map((videoUrl, index) => (
-            <video
-              key={`video-${index}`}
-              src={videoUrl}
-              controls
-              className="inline-block w-[200px] h-[200px] rounded-lg mr-2 object-cover"
-            />
-          ))}
-          {/* Fallback if no images or videos in arrays, but single image/video URLs exist - for gallery fallback, we can skip this as prominent image already handles single imageUrl */}
-        </div>
-
-
-        {/* Title and Basic Info */}
-        <h1 className="text-3xl font-bold mt-4">{challengeData.title}</h1>
-        <p className="text-gray-400">{challengeData.subtitle}</p>
-
-        {/* Creator Info */}
-        <div className="flex items-center mt-4">
-          <img src={challengeData.creatorAvatarUrl} alt={challengeData.creatorName} className="w-12 h-12 rounded-full mr-3" />
-          <div>
-            <p className="font-semibold">{challengeData.creatorName}</p>
-            <p className="text-gray-400">Creator</p>
-          </div>
-        </div>
-
-
-        {/* Stats Section */}
-        <div className="grid grid-cols-3 gap-4 my-6">
-          <div className="stat place-items-center">
-            <div className="stat-title text-gray-300 flex items-center">
-              <Users className="mr-1" size={16} /> Participants
+    <div className="relative min-h-screen bg-black text-white">
+  
+      {/* Fullscreen Map Background */}
+      <iframe
+        src={mapUrl}
+        title="Google Maps WebView"
+        className="absolute top-0 left-0 w-full h-full z-0"
+        style={{ border: 'none' }}
+        allowFullScreen
+      ></iframe>
+  
+      {/* Foreground Content */}
+      <div className="relative z-10 flex flex-col justify-end min-h-screen p-4 pointer-events-none">
+        <div
+          ref={cardRef}
+          className="bg-gray-800 rounded-2xl p-4 shadow-md transition-all duration-300 ease-in-out pointer-events-auto"
+          style={{ marginBottom: '10px', marginLeft:"40px", marginRight:"40px", maxHeight: '75vh', overflowY: 'auto' }}
+        >
+  
+          {/* Title and Basic Info */}
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h1 className="text-lg font-bold">{challengeData.title}</h1>
+              <p className="text-gray-400 text-xs">{challengeData.subtitle}</p>
             </div>
-            <div className="stat-value text-xl">{challengeData.participants}</div>
-          </div>
-          <div className="stat place-items-center">
-            <div className="stat-title text-gray-300 flex items-center">
-              <Calendar className="mr-1" size={16} /> Start Date
-            </div>
-            <div className="stat-value text-xl">{challengeData.startDate}</div>
-          </div>
-          <div className="stat place-items-center">
-            <div className="stat-title text-gray-300">Daily Visits</div>
-            <div className="stat-value text-xl">{challengeData.dailyVisits}</div>
-          </div>
-        </div>
-
-
-        {/* Description (Expandable) */}
-        <div className="mt-4">
-          <p className={`text-gray-300 ${showMore ? '' : 'line-clamp-3'}`}>
-            {challengeData.description}
-          </p>
-          <button onClick={toggleShowMore} className="text-blue-400 mt-1">
-            {showMore ? (
-              <span>
-                <ChevronUp size={16} className="inline mr-1" /> Show Less
-              </span>
+  
+            {authUser ? (
+              <button
+                onClick={handleAcceptChallenge}
+                className="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full focus:outline-none focus:shadow-outline flex items-center text-xs"
+              >
+                <Navigation size={20} />
+              </button>
             ) : (
-              <span>
-                <ChevronDown size={16} className="inline mr-1" /> Show More
-              </span>
+              <div className="text-right">
+                <p className="text-gray-400 text-xs mb-2">
+                  Please <Link href="/login" className="text-blue-400 hover:underline">login</Link> or <Link href="/signup" className="text-blue-400 hover:underline">signup</Link> to accept.
+                </p>
+              </div>
             )}
-          </button>
-        </div>
-
-
-        {/* Map Section */}
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-2 flex items-center">
-            <MapPin className="mr-2" size={20} /> Location
-          </h2>
-          <p className="text-gray-300">{challengeData.locationName}</p>
-          <button onClick={handleSeeOnMap} className="mt-2 text-blue-400 btn btn-ghost font-semibold">
-            See on Map
-          </button>
-        </div>
-
-<div className="w-full md:w-3/4 p-4">
-  <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden">
-    <iframe
-      src={mapUrl}
-      title="Google Maps WebView"
-      style={{ width: '100%', height: '600px', border: 'none' }}
-      allowFullScreen
-    ></iframe>
-  </div>
-</div>
-
-        {/* File attachments */}
-        {challengeData.challengeFiles && challengeData.challengeFiles.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold mb-2 flex items-center">
-              <File className="mr-2" size={20} /> Files
-            </h2>
-            <div className="flex flex-col space-y-2">
-              {challengeData.challengeFiles.map((file, index) => (
-                <a
-                  key={index}
-                  href={file}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline"
-                >
-                  File {index + 1}
-                </a>
-              ))}
+          </div>
+  
+          {/* Prominent Image */}
+          {(challengeData.challengeImages?.[0] || challengeData.imageUrl) && (
+            <img
+              src={challengeData.challengeImages?.[0] || challengeData.imageUrl}
+              alt={challengeData.title}
+              className="w-full h-[120px] object-cover rounded-lg mb-2"
+            />
+          )}
+  
+          {/* Media Gallery */}
+          <div className="overflow-x-auto whitespace-nowrap mb-2">
+            {(challengeData.challengeImages || []).map((imageUrl, index) => (
+              <img
+                key={`image-${index}`}
+                src={imageUrl}
+                alt={`Challenge Image ${index + 1}`}
+                className="inline-block w-[80px] h-[80px] rounded-lg mr-1 object-cover hover:scale-110 transition-transform"
+              />
+            ))}
+            {(challengeData.challengeVideos || []).map((videoUrl, index) => (
+              <video
+                key={`video-${index}`}
+                src={videoUrl}
+                controls
+                className="inline-block w-[80px] h-[80px] rounded-lg mr-1 object-cover hover:scale-110 transition-transform"
+              />
+            ))}
+          </div>
+  
+          {/* Creator Info */}
+          <div className="flex items-center mb-2">
+            <img src={challengeData.creatorAvatarUrl} alt={challengeData.creatorName} className="w-6 h-6 rounded-full mr-2" />
+            <div>
+              <p className="font-semibold text-xs">{challengeData.creatorName}</p>
+              <p className="text-gray-400 text-xxs">Creator</p>
             </div>
           </div>
-        )}
-
-
-        {/* Action Bar */}
-        <div className="flex items-center justify-between mt-6">
-          <div className="flex space-x-4">
-
-            <button onClick={toggleLike} className="hover:text-red-500 transition-colors group">
-              <Heart className={liked ? "text-red-500 text-xl group-active:scale-125 transition-transform" : "text-xl group-active:scale-125 transition-transform"} fill={liked ? "red" : "none"} />
-            </button>
-
-            <button className="hover:text-blue-500 transition-colors group">
-              <MessageCircle className="text-xl group-active:scale-125 transition-transform" />
-            </button>
-            <button className="hover:text-blue-500 transition-colors group">
-              <Share2 className="text-xl group-active:scale-125 transition-transform" />
+  
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 my-2">
+            <div className="stat place-items-center p-0 hover:bg-gray-700 rounded">
+              <div className="stat-title text-gray-300 flex items-center text-xxs">
+                <Users className="mr-1" size={12} /> Participants
+              </div>
+              <div className="stat-value text-xs">{challengeData.participants}</div>
+            </div>
+            <div className="stat place-items-center p-0 hover:bg-gray-700 rounded">
+              <div className="stat-title text-gray-300 flex items-center text-xxs">
+                <Calendar className="mr-1" size={12} /> Start Date
+              </div>
+              <div className="stat-value text-xs">{challengeData.startDate}</div>
+            </div>
+            <div className="stat place-items-center p-0 hover:bg-gray-700 rounded">
+              <div className="stat-title text-gray-300 text-xxs">Daily Visits</div>
+              <div className="stat-value text-xs">{challengeData.dailyVisits}</div>
+            </div>
+          </div>
+  
+          {/* Description */}
+          <div className="mb-2">
+            <p className={`text-gray-300 text-xxs ${showMore ? '' : 'line-clamp-3'}`}>
+              {challengeData.description}
+            </p>
+            <button onClick={toggleShowMore} className="text-blue-400 mt-1 text-xxs hover:text-blue-300">
+              {showMore ? (
+                <span><ChevronUp size={12} className="inline mr-1" /> Show Less</span>
+              ) : (
+                <span><ChevronDown size={12} className="inline mr-1" /> Show More</span>
+              )}
             </button>
           </div>
-
-          <button onClick={toggleBookmark} className="hover:text-blue-500 transition-colors group">
-            <Bookmark className={bookmarked ? "text-xl group-active:scale-125 transition-transform fill-current" : "text-xl group-active:scale-125 transition-transform"} fill={bookmarked ? "currentColor" : "none"} />
-          </button>
+  
+          {/* Files */}
+          {challengeData.challengeFiles?.length > 0 && (
+            <div className="mb-2">
+              <h2 className="text-sm font-semibold mb-1 flex items-center">
+                <File className="mr-1" size={14} /> Files
+              </h2>
+              <div className="flex flex-col space-y-0.5">
+                {challengeData.challengeFiles.map((file, index) => (
+                  <a
+                    key={index}
+                    href={file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline text-xxs hover:text-blue-300"
+                  >
+                    File {index + 1}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+  
+          {/* Action Bar */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex space-x-2">
+              <button onClick={toggleLike} className="hover:text-red-500 transition-colors group">
+                <Heart className={liked ? "text-red-500 group-active:scale-125" : "group-active:scale-125"} size={16} fill={liked ? "red" : "none"} />
+              </button>
+              <button className="hover:text-blue-500 transition-colors group">
+                <MessageCircle className="group-active:scale-125" size={16} />
+              </button>
+              <button className="hover:text-blue-500 transition-colors group">
+                <Share2 className="group-active:scale-125" size={16} />
+              </button>
+            </div>
+  
+            <button onClick={toggleBookmark} className="hover:text-blue-500 transition-colors group">
+              <Bookmark className={bookmarked ? "fill-current group-active:scale-125" : "group-active:scale-125"} size={16} fill={bookmarked ? "currentColor" : "none"} />
+            </button>
+          </div>
+  
         </div>
-
-                {/* "Accept Challenge" Button - Conditionally Rendered */}
-                {authUser ? (
-                    <button
-                        onClick={handleAcceptChallenge}
-                        className="mt-6 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                    >
-                        Accept challenge!
-                    </button>
-                ) : (
-                    <div className="mt-6 text-center">
-                        <p className="text-gray-400 mb-2">Please <Link href="/login" className="text-blue-400 hover:underline">login</Link> or <Link href="/signup" className="text-blue-400 hover:underline">signup</Link> to accept this challenge.</p>
-                    </div>
-                )}
-
       </div>
     </div>
   );
+  
 };
 
 export default ChallengeDetailsPage;
