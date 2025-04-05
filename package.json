@@ -37,7 +37,8 @@
     "react-leaflet": "^5.0.0",
     "react-map-gl": "^8.0.2",
     "react-webview": "^0.1.0",
-    "three": "^0.175.0"
+    "three": "^0.175.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

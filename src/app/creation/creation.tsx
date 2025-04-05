@@ -1,7 +1,7 @@
 // components/ChallengeCreation.tsx
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react'; // Import useContext if needed
 import { db, storage } from '@/firebase/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -16,10 +16,10 @@ import Point from 'ol/geom/Point';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import { Style, Icon } from 'ol/style';
-import { FaMapMarkerAlt, FaImage, FaVideo, FaUser, FaTag } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaImage, FaVideo, FaUser, FaTag, FaCalendar } from 'react-icons/fa';
 import Geocoder from 'ol-geocoder';
 import 'ol-geocoder/dist/ol-geocoder.min.css';
-
+import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 
 interface Location {
     latitude: number;
@@ -36,18 +36,50 @@ interface ChallengeFormData {
     creatorName: string;
     creatorAvatarUrl: string;
     category: string;
+    expiryDate: string;
+    creatorId: string; // Added creatorId field
 }
 
+// Type definition for your auth user
+interface AuthUser {
+    uid: string | null;
+    email?: string | null;
+    displayName?: string | null;
+}
+
+
+// Mock authentication hook
+const useMockAuth = () => {
+    // *** SCENARIO 1: Simulate LOGGED-OUT user ***
+    //return { authUser: null, loading: false };
+
+    // *** SCENARIO 2: Simulate LOGGED-IN user ***
+    const mockUser = { uid: 'kjafJ0pUp3byMrveRE1kYAyJ4Je2', email: 'neupanekiran23@gmail.com', displayName: 'Nupane Kiran' };
+    return { authUser: mockUser, loading: false };
+};
+
+
 const ChallengeCreation = () => {
+    // Retrieve creatorId from localStorage on component mount
+    const initialCreatorId = () => {
+        if (typeof window !== 'undefined') {
+            const storedId = localStorage.getItem('creatorId');
+            return storedId || uuidv4(); // Generate new if none exists
+        }
+        return uuidv4(); // Generate server side if localstorage isnt available.
+    };
+
     const [formData, setFormData] = useState<ChallengeFormData>({
         title: '',
         description: '',
         imageUrls: [],
         videoUrl: '',
-        location: { latitude: 0, longitude: 0, address: '' }, // Initialize address
+        location: { latitude: 0, longitude: 0, address: '' },
         creatorName: '',
         creatorAvatarUrl: '',
         category: '',
+        expiryDate: '',
+        creatorId: initialCreatorId(), // Initialize creatorId from localStorage or generate new
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -84,7 +116,7 @@ const ChallengeCreation = () => {
         });
     };
 
-   const updateMarker = (coordinates: number[], map: Map) => {
+    const updateMarker = (coordinates: number[], map: Map) => {
         const newMarker = new Feature({
             geometry: new Point(coordinates),
             name: 'Challenge Location'
@@ -103,7 +135,7 @@ const ChallengeCreation = () => {
                     const source = layer.getSource();
                     if (source instanceof VectorSource) {
                         const features = source.getFeatures();
-                         features.forEach(feature => {
+                        features.forEach(feature => {
                             if (feature.get('name') === 'Challenge Location') {
                                 map.removeLayer(layer);
                             }
@@ -120,21 +152,45 @@ const ChallengeCreation = () => {
 
     //  Reverse Geocoding (kept outside useEffect)
     const reverseGeocode = async (longitude: number, latitude: number) => {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lon=${longitude}&lat=${latitude}&zoom=18&addressdetails=1`;
-      try {
-          const response = await fetch(url);
-          const data = await response.json();
-          return data?.display_name || "Address not found"; // Use optional chaining
-      } catch (error) {
-          console.error("Reverse geocoding error:", error);
-          return "Error fetching address";
-      }
-  };
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lon=${longitude}&lat=${latitude}&zoom=18&addressdetails=1`;
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            return data?.display_name || "Address not found"; // Use optional chaining
+        } catch (error) {
+            console.error("Reverse geocoding error:", error);
+            return "Error fetching address";
+        }
+    };
 
     //  handleLocationChange (kept outside useEffect)
     const handleLocationChange = (location: Location) => {
-      setFormData(prevFormData => ({ ...prevFormData, location }));
+        setFormData(prevFormData => ({ ...prevFormData, location }));
     };
+
+    //  --------------------- ADDED CODE HERE ---------------------
+    //  Get the authUser from your authentication hook
+    const { authUser } = useMockAuth();
+
+
+    useEffect(() => {
+        // If user is logged in and creatorId doesn't match, update it
+        if (authUser?.uid && formData.creatorId !== authUser.uid) {
+            setFormData(prevFormData => ({ ...prevFormData, creatorId: authUser.uid }));
+        } else if (!authUser?.uid && formData.creatorId !== '') {
+            // If user is logged out, reset creatorId to a default value or generate a new UUID
+            setFormData(prevFormData => ({ ...prevFormData, creatorId: uuidv4() })); // Or use an empty string:  creatorId: ''
+        }
+    }, [authUser, formData.creatorId]);
+
+    // Effect to save creatorId to localStorage whenever it changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('creatorId', formData.creatorId);
+        }
+    }, [formData.creatorId]);
+
+    //  --------------------- END OF ADDED CODE ---------------------
 
     useEffect(() => {
         if (typeof window === 'undefined' || !mapRef.current) return;
@@ -164,9 +220,9 @@ const ChallengeCreation = () => {
             map.addControl(geocoder);
 
             geocoder.on('addresschosen', (evt: any) => {
-              const coordinates = evt.coordinate;
-              map.getView().animate({ center: coordinates, zoom: 15 });
-              // No marker, no location update on search.
+                const coordinates = evt.coordinate;
+                map.getView().animate({ center: coordinates, zoom: 15 });
+                // No marker, no location update on search.
             });
 
             //  Click handler is now ASYNC
@@ -179,8 +235,8 @@ const ChallengeCreation = () => {
 
                 //  THEN update the state and marker
                 handleLocationChange({ latitude, longitude, address }); // Include address
-                if (mapInstance.current){
-                  updateMarker(clickedCoordinate, mapInstance.current);
+                if (mapInstance.current) {
+                    updateMarker(clickedCoordinate, mapInstance.current);
                 }
             };
 
@@ -197,76 +253,91 @@ const ChallengeCreation = () => {
         }
 
         // Only update the marker IF location data is present (from click)
-        if (formData.location.latitude !== 0 && formData.location.longitude !==0 && mapInstance.current) {
+        if (formData.location.latitude !== 0 && formData.location.longitude !== 0 && mapInstance.current) {
             const newCoordinates = fromLonLat([formData.location.longitude, formData.location.latitude]);
             updateMarker(newCoordinates, mapInstance.current);
         }
 
-    }, [formData.location]); //  formData.location as dependency
+    }, [formData.location]);
 
-   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         // Retained but commented
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setLoading(true);
-      setError(null);
-      setSuccess(false);
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        setSuccess(false);
 
-      const filteredImageUrls = formData.imageUrls.filter(url => url.trim() !== '');
+        const filteredImageUrls = formData.imageUrls.filter(url => url.trim() !== '');
 
-      if (!formData.title || !formData.description || filteredImageUrls.length === 0 || !formData.creatorName || !formData.creatorAvatarUrl || !formData.category || formData.location.latitude === 0 || formData.location.longitude === 0) {
-          setError('Please fill in all required fields, add at least one image URL, and set the location.');
-          setLoading(false);
-          return;
-      }
+        if (
+            !formData.title ||
+            !formData.description ||
+            filteredImageUrls.length === 0 ||
+            !formData.creatorName ||
+            !formData.creatorAvatarUrl ||
+            !formData.category ||
+            !formData.expiryDate ||
+            formData.location.latitude === 0 ||
+            formData.location.longitude === 0
+        ) {
+            setError('Please fill in all required fields, add at least one image URL, set the location, and select an expiry date.');
+            setLoading(false);
+            return;
+        }
 
-      try {
-          await addDoc(collection(db, 'challenges'), {
-              ...formData,
-              imageUrls: filteredImageUrls,
-              timestamp: serverTimestamp(),
-          });
+        try {
+            const challengeData = {
+                ...formData,
+                imageUrls: filteredImageUrls,
+                timestamp: serverTimestamp(),
+            };
+            await addDoc(collection(db, 'challenges'), challengeData);
 
-          setSuccess(true);
-          setLoading(false);
-           setFormData({
-              title: '',
-              description: '',
-              imageUrls: [],
-              videoUrl: '',
-              location: { latitude: 0, longitude: 0, address: '' }, // Reset address
-              creatorName: '',
-              creatorAvatarUrl: '',
-              category: '',
-          });
-          setUploadProgress(0);
-          if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-          }
-          if (mapInstance.current) {
-              mapInstance.current.getView().animate({ center: fromLonLat([0, 0]), zoom: 2 });
-              mapInstance.current.getLayers().forEach(layer => {
-                  if (layer instanceof VectorLayer) {
-                      const source = layer.getSource();
-                      if (source instanceof VectorSource) {
-                          source.clear();
-                      }
-                  }
-              });
-              marker.current = null;
-          }
-      } catch (err: any) {
-          setError('Error creating challenge: ' + err.message);
-          setLoading(false);
-          console.error("Error adding document: ", err);
-      }
-  };
+            setSuccess(true);
+            setLoading(false);
+            setFormData(prevFormData => ({
+                ...prevFormData,
+                title: '',
+                description: '',
+                imageUrls: [],
+                videoUrl: '',
+                location: { latitude: 0, longitude: 0, address: '' },
+                creatorName: '',
+                creatorAvatarUrl: '',
+                category: '',
+                expiryDate: '',
+                //creatorId: authUser?.uid || '' // Consider resetting creatorId as well after successful submission
+            }));
+            setUploadProgress(0);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            if (mapInstance.current) {
+                mapInstance.current.getView().animate({ center: fromLonLat([0, 0]), zoom: 2 });
+                mapInstance.current.getLayers().forEach(layer => {
+                    if (layer instanceof VectorLayer) {
+                        const source = layer.getSource();
+                        if (source instanceof VectorSource) {
+                            source.clear();
+                        }
+                    }
+                });
+                marker.current = null;
+            }
+        } catch (err: any) {
+            setError('Error creating challenge: ' + err.message);
+            setLoading(false);
+            console.error("Error adding document: ", err);
+        }
+    };
 
-  const handleAddImageClick = () => {
+
+    const handleAddImageClick = () => {
         // Retained but commented out
-  };
+    };
 
 
     return (
@@ -422,8 +493,23 @@ const ChallengeCreation = () => {
                         />
                     </div>
 
+                    <div className="space-y-1">
+                        <label htmlFor="expiryDate" className="block text-sm font-medium text-white">
+                            <FaCalendar className="inline-block mr-2 text-purple-400" /> Expiry Date
+                        </label>
+                        <input
+                            type="datetime-local"
+                            id="expiryDate"
+                            name="expiryDate"
+                            value={formData.expiryDate}
+                            onChange={handleChange}
+                            className="input input-bordered w-full bg-gray-800 text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500"
+                            required
+                        />
+                    </div>
 
-                   <div className="space-y-2">
+
+                    <div className="space-y-2">
                         <label className="block text-sm font-medium text-white">
                             <FaMapMarkerAlt className="inline-block mr-2 text-purple-400" /> Location
                         </label>

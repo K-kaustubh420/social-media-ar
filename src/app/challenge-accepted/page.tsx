@@ -16,6 +16,7 @@ const ChallengeAcceptedPage: React.FC = () => {
   const latitude = searchParams.get('latitude');
   const longitude = searchParams.get('longitude');
   const expiryDate = searchParams.get('expiryDate');
+  
 
   const useMockAuth = () => {
     const mockUser = { uid: 'kjafJ0pUp3byMrveRE1kYAyJ4Je2', email: 'neupanekiran23@gmail.com', displayName: 'Nupane Kiran' };
@@ -401,7 +402,7 @@ const ChallengeAcceptedPage: React.FC = () => {
               Show AR View
             </Link>
             <Link
-              href="/finalpage"
+              href={`/finalpage/${challengeId}`}
               className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-xl"
             >
               See Final Page

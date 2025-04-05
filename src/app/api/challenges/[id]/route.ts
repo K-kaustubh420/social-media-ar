@@ -16,6 +16,8 @@ export async function GET(request: Request, context: { params: { id: string } })
       const location = challengeData.location || {}; // Ensure location exists to avoid undefined errors
       const latitude = location.latitude || null;
       const longitude = location.longitude || null;
+      const expiryDate = challengeData.expiryDate || null;
+
 
       const timestamp = challengeData.timestamp ? challengeData.timestamp.toDate().toISOString() : undefined;
 
@@ -37,6 +39,7 @@ export async function GET(request: Request, context: { params: { id: string } })
         challengeFiles: challengeData.challengeFiles || [],
         imageUrl: challengeData.imageUrl || null,
         videoUrl: challengeData.videoUrl || null,
+        expiryDate: challengeData.expiryDate || null,
         timestamp,
       };
 

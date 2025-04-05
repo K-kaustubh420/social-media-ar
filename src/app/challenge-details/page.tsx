@@ -105,7 +105,8 @@ const useMockAuth = () => {
     }
 
     // Redirect to ChallengeAcceptedPage, passing challenge details as query parameters
-    router.push(`/challenge-accepted?id=${challengeId}&title=${encodeURIComponent(challengeData?.title || '')}&locationName=${encodeURIComponent(challengeData?.locationName || '')}&latitude=${challengeData?.latitude}&longitude=${challengeData?.longitude}&expiryDate=${challengeData?.expiryDate}`);
+    router.push(`/challenge-accepted?id=${challengeId}&title=${encodeURIComponent(challengeData?.title || '')}&locationName=${encodeURIComponent(challengeData?.locationName || '')}&latitude=${challengeData?.latitude}&longitude=${challengeData?.longitude}&expiryDate=${encodeURIComponent(challengeData?.expiryDate || '')}
+`);
   };
 
 
